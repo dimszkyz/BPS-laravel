@@ -6,61 +6,89 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UjianController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\PesertaController;
-use App\Http\Controllers\HasilController; // <-- Jangan lupa import ini
+use App\Http\Controllers\HasilController;
+use App\Http\Controllers\AdminController; 
+use App\Http\Controllers\InviteController;
+use App\Http\Controllers\ForgotPasswordController;
 
 /*
 |--------------------------------------------------------------------------
-| 1. PUBLIC ROUTES (Bisa diakses tanpa login)
+| PUBLIC ROUTES
 |--------------------------------------------------------------------------
 */
-
-// Login Admin (Sesuai panggilan Frontend: /api/admin/login)
 Route::post('/admin/login', [AuthController::class, 'login']);
-
-// Login Peserta (Sesuai panggilan Frontend: /api/invite/login)
-Route::post('/invite/login', [AuthController::class, 'loginPeserta']);
-
-// Pengaturan Public (Logo & Background, agar bisa dimuat di halaman login)
+Route::post('/invite/login', [InviteController::class, 'login']);
 Route::get('/settings', [SettingsController::class, 'index']);
+
+// Public Ujian Routes (Untuk Peserta yang sudah login di frontend tapi fetch data publik)
+// Atau bisa dimasukkan ke middleware sanctum jika peserta login pakai token
+// Di sistem lama sepertinya '/public/:id' itu terbuka atau semi-protected.
+// Kita taruh luar dulu atau buat middleware khusus peserta nanti.
+Route::get('/ujian/check-active/{id}', [UjianController::class, 'checkActive']);
+Route::get('/ujian/public/{id}', [UjianController::class, 'showPublic']);
+Route::post('/admin/forgot-password', [ForgotPasswordController::class, 'requestReset']);
 
 
 /*
 |--------------------------------------------------------------------------
-| 2. PROTECTED ROUTES (Harus Login / Punya Token)
+| PROTECTED ROUTES (ADMIN)
 |--------------------------------------------------------------------------
-| Middleware 'auth:sanctum' akan memvalidasi token Bearer.
 */
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    // --- AUTH ADMIN ---
     Route::get('/auth/admin/me', [AuthController::class, 'me']);
     Route::post('/auth/admin/logout', [AuthController::class, 'logout']);
+    
+    // Ping Sidebar
+    Route::get('/admin/ping', [AdminController::class, 'ping']);
 
-    // --- MANAJEMEN UJIAN ---
-    Route::get('/ujian', [UjianController::class, 'index']);       // List Ujian
-    Route::post('/ujian', [UjianController::class, 'store']);      // Buat Ujian Baru
-    Route::get('/ujian/{id}', [UjianController::class, 'show']);   // Detail Ujian
-    Route::put('/ujian/{id}', [UjianController::class, 'update']); // Edit Ujian
-    Route::delete('/ujian/{id}', [UjianController::class, 'destroy']); // Hapus Ujian
+    // Admin Management (Superadmin)// Admin Management (Superadmin)
+    Route::get('/admins', [AdminController::class, 'index']); 
+    Route::post('/admins', [AdminController::class, 'store']);
+    
+    // [FIX 404] Tambahkan route ini agar frontend yang memanggil /api/admin-list bisa jalan
+    Route::get('/admin-list', [AdminController::class, 'index']); 
+    
+    // Route untuk update role, username, dan toggle status (sesuai kode DaftarAdmin.jsx)
+    Route::put('/admin/update-role/{id}', [AdminController::class, 'updateRole']);
+    Route::put('/admin/update-username/{id}', [AdminController::class, 'updateUsername']);
+    Route::put('/admin/toggle-status/{id}', [AdminController::class, 'toggleStatus']);
+    Route::delete('/admins/{id}', [AdminController::class, 'destroy']);
 
-    // --- MANAJEMEN PESERTA ---
-    Route::get('/peserta', [PesertaController::class, 'index']);       // List Peserta
-    Route::post('/peserta', [PesertaController::class, 'store']);      // Tambah Peserta Manual
-    Route::get('/peserta/{id}', [PesertaController::class, 'show']);   // Detail Peserta
-    Route::put('/peserta/{id}', [PesertaController::class, 'update']); // Edit Peserta
-    Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']); // Hapus Peserta
-    Route::post('/peserta/import', [PesertaController::class, 'import']); // Import Excel
+    // Ujian (Admin)
+    Route::get('/ujian', [UjianController::class, 'index']);
+    Route::post('/ujian', [UjianController::class, 'store']);
+    Route::get('/ujian/{id}', [UjianController::class, 'show']);
+    Route::put('/ujian/{id}', [UjianController::class, 'update']);
+    Route::delete('/ujian/{id}', [UjianController::class, 'destroy']);
 
-    // --- HASIL UJIAN (BARU) ---
-    Route::post('/hasil/draft', [HasilController::class, 'storeDraft']); // Autosave Jawaban
-    Route::post('/hasil', [HasilController::class, 'store']);            // Submit Final
-    Route::get('/hasil', [HasilController::class, 'index']);             // Rekap Nilai (Admin)
-    Route::get('/hasil/peserta/{peserta_id}', [HasilController::class, 'showByPeserta']); // Detail Jawaban Peserta
-    Route::put('/hasil/nilai-manual', [HasilController::class, 'updateNilaiManual']); // Koreksi Manual
+    // Peserta
+    Route::get('/peserta', [PesertaController::class, 'index']);
+    Route::post('/peserta', [PesertaController::class, 'store']);
+    Route::get('/peserta/{id}', [PesertaController::class, 'show']);
+    Route::put('/peserta/{id}', [PesertaController::class, 'update']);
+    Route::delete('/peserta/{id}', [PesertaController::class, 'destroy']);
+    Route::post('/peserta/import', [PesertaController::class, 'import']);
 
-    // --- PENGATURAN (SETTINGS) ---
+    // Hasil
+    Route::post('/hasil/draft', [HasilController::class, 'storeDraft']);
+    Route::post('/hasil', [HasilController::class, 'store']);
+    Route::get('/hasil', [HasilController::class, 'index']);
+    Route::get('/hasil/peserta/{peserta_id}', [HasilController::class, 'showByPeserta']);
+    Route::put('/hasil/nilai-manual', [HasilController::class, 'updateNilaiManual']);
+
+    // Settings
     Route::post('/settings', [SettingsController::class, 'update']);
     Route::get('/settings/smtp', [SettingsController::class, 'getSmtp']);
     Route::put('/settings/smtp', [SettingsController::class, 'updateSmtp']);
 
+    // --- INVITE / UNDANGAN ---
+    Route::get('/admin/invite-history', [InviteController::class, 'index']); // <--- INI SOLUSINYA
+    Route::post('/invite', [InviteController::class, 'sendInvite']);
+    Route::delete('/invite/{id}', [InviteController::class, 'destroy']);
+
+    // --- RESET PASSWORD MANAGEMENT (Superadmin) ---
+    Route::get('/admin/forgot-password/requests', [ForgotPasswordController::class, 'index']);
+    Route::post('/admin/forgot-password/approve', [ForgotPasswordController::class, 'approve']);
+    Route::post('/admin/forgot-password/reject', [ForgotPasswordController::class, 'reject']);
 });

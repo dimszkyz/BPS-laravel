@@ -333,4 +333,85 @@ class UjianController extends Controller
         $exam->update(['is_deleted' => true]);
         return response()->json(['message' => 'Ujian berhasil diarsipkan']);
     }
+
+    public function checkActive($id)
+    {
+        $exam = Exam::where('id', $id)->where('is_deleted', 0)->first();
+
+        if (!$exam) {
+            return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
+        }
+
+        $now = now(); // Waktu server (pastikan timezone server WIB atau sesuai)
+        // Jika settingan timezone Laravel sudah 'Asia/Jakarta', $now sudah benar.
+        
+        $msg = null;
+        
+        // Logika tanggal & jam
+        $startDateTime = \Carbon\Carbon::parse($exam->tanggal . ' ' . $exam->jam_mulai);
+        $endDateTime = \Carbon\Carbon::parse($exam->tanggal_berakhir . ' ' . $exam->jam_berakhir);
+
+        if ($now->lessThan($startDateTime)) {
+             $msg = "Ujian belum dimulai.";
+        } elseif ($now->greaterThan($endDateTime)) {
+             $msg = "Ujian sudah berakhir.";
+        } else {
+            // Cek jam harian (jika range tanggal > 1 hari, biasanya jam operasional per hari dicek)
+            // Logika sederhana: jika dalam range tanggal, cek jam saat ini
+            $currentTime = $now->format('H:i:s');
+            if ($currentTime < $exam->jam_mulai || $currentTime > $exam->jam_berakhir) {
+                $msg = "Jam ujian saat ini ditutup. Akses: " . $exam->jam_mulai . " - " . $exam->jam_berakhir;
+            }
+        }
+
+        if ($msg) {
+            return response()->json(['message' => $msg], 403);
+        }
+
+        return response()->json($exam);
+    }
+
+    /**
+     * GET /api/ujian/public/:id
+     * Ambil soal untuk dikerjakan (Tanpa Kunci Jawaban)
+     */
+    public function showPublic($id)
+    {
+        $exam = Exam::with(['questions.options'])->find($id);
+        if (!$exam) return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
+
+        // Format data aman untuk peserta
+        $soalList = $exam->questions->map(function($q) {
+            $pilihan = $q->options->map(function($opt) {
+                return [
+                    'id' => $opt->id,
+                    'text' => $opt->opsi_text,
+                    // PENTING: Jangan kirim is_correct ke frontend peserta!
+                ];
+            });
+            
+            // Acak pilihan jika setting ujian mengizinkan
+            // if ($exam->acak_opsi) { $pilihan = $pilihan->shuffle(); }
+
+            return [
+                'id' => $q->id,
+                'tipeSoal' => $q->tipe_soal,
+                'soalText' => $q->soal_text,
+                'gambar' => $q->gambar,
+                'bobot' => $q->bobot,
+                'fileConfig' => $q->file_config,
+                'pilihan' => $pilihan
+            ];
+        });
+        
+        // Acak soal jika perlu
+        // if ($exam->acak_soal) { $soalList = $soalList->shuffle(); }
+
+        return response()->json([
+            'id' => $exam->id,
+            'keterangan' => $exam->keterangan,
+            'durasi' => $exam->durasi,
+            'soalList' => $soalList
+        ]);
+    }
 }
