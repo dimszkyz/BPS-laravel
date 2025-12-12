@@ -1,6 +1,6 @@
 // File: src/component/sidebar.jsx
 import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom"; // Tambah useNavigate
 import {
   FaClipboardList,
   FaEdit,
@@ -14,13 +14,15 @@ import {
   FaUserShield,
   FaKey,
   FaBars,
-  FaTimes,          // <-- TAMBAHAN
+  FaTimes,
 } from "react-icons/fa";
-import { jwtDecode } from "jwt-decode";
+
+// HAPUS INI: import { jwtDecode } from "jwt-decode"; 
 
 const API_URL = "http://localhost:8000";
 
 const Sidebar = () => {
+  const navigate = useNavigate(); // Gunakan hook navigasi
   const [hasNewResult, setHasNewResult] = useState(false);
   const [adminData, setAdminData] = useState({
     username: "",
@@ -29,91 +31,67 @@ const Sidebar = () => {
   });
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // drawer mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // --- LOGIC AUTHENTICATION ---
   const forceLogout = () => {
-    sessionStorage.removeItem("adminToken");
-    sessionStorage.removeItem("adminData");
-    sessionStorage.removeItem("newHasilUjian");
+    sessionStorage.clear(); // Bersihkan semua sesi
     window.location.href = "/admin/login";
   };
 
   useEffect(() => {
+    // 1. Cek Token di Storage
     const token = sessionStorage.getItem("adminToken");
     if (!token) {
       forceLogout();
       return;
     }
 
+    // 2. Load Data Admin dari Storage (Tanpa Decode Token)
     try {
       const storedAdmin = JSON.parse(
         sessionStorage.getItem("adminData") || "{}"
       );
       setAdminData({
-        username: storedAdmin.username || "Nama Admin",
-        email: storedAdmin.email || "admin@example.com",
+        username: storedAdmin.username || "Admin",
+        email: storedAdmin.email || "admin@bps.com",
         role: storedAdmin.role || "admin",
       });
 
       const newResult = sessionStorage.getItem("newHasilUjian") === "true";
       if (newResult) setHasNewResult(true);
     } catch (error) {
-      console.error("Data admin error:", error);
+      console.error("Gagal load data admin:", error);
     }
 
-    const checkTokenValidity = () => {
-      const currentToken = sessionStorage.getItem("adminToken");
-      if (!currentToken) {
-        forceLogout();
-        return;
-      }
+    // 3. Cek Validitas Token via API (Bukan jwt-decode)
+    const verifyToken = async () => {
       try {
-        const decodedToken = jwtDecode(currentToken);
-        const currentTime = Date.now() / 1000;
-        if (decodedToken.exp < currentTime) {
+        const res = await fetch(`${API_URL}/api/auth/admin/me`, {
+           headers: { 
+             "Authorization": `Bearer ${token}`,
+             "Accept": "application/json" 
+           }
+        });
+
+        if (res.status === 401) {
+          console.warn("Sesi habis, logout...");
           forceLogout();
         }
-      } catch (error) {
-        forceLogout();
+      } catch (err) {
+        console.error("Gagal verifikasi sesi:", err);
       }
     };
 
-    const pingActiveStatus = async () => {
-      const currentToken = sessionStorage.getItem("adminToken");
-      if (!currentToken) return;
+    verifyToken();
+    
+    // Cek berkala setiap 60 detik (Opsional)
+    const intervalId = setInterval(verifyToken, 60000); 
+    return () => clearInterval(intervalId);
 
-      // --- TAMBAHAN: Cek validitas waktu SEBELUM melakukan fetch ---
-      try {
-        const decoded = jwtDecode(currentToken);
-        if (decoded.exp * 1000 < Date.now() + 5000) {
-          return; 
-        }
-      } catch (e) {
-        return; 
-      }
-
-      try {
-        await fetch(`${API_URL}/api/admin/ping`, {
-          headers: { Authorization: `Bearer ${currentToken}` },
-        });
-      } catch (error) {
-        console.error("Ping error:", error);
-      }
-    };
-
-    checkTokenValidity();
-    pingActiveStatus();
-
-    const tokenIntervalId = setInterval(checkTokenValidity, 5000);
-    const pingIntervalId = setInterval(pingActiveStatus, 15000);
-
-    return () => {
-      clearInterval(tokenIntervalId);
-      clearInterval(pingIntervalId);
-    };
   }, []);
 
+  // --- SISA KODE TAMPILAN (TIDAK BERUBAH) ---
   const getNavLinkClass = ({ isActive }) => {
     const baseClasses =
       "flex items-center space-x-3 py-2.5 px-4 rounded-md transition-colors duration-200 ease-in-out text-sm";
@@ -130,11 +108,26 @@ const Sidebar = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsLoggingOut(true);
+    const token = sessionStorage.getItem("adminToken");
+    
+    // Request Logout ke Backend (Best Practice)
+    try {
+        await fetch(`${API_URL}/api/auth/admin/logout`, {
+            method: 'POST',
+            headers: { 
+                "Authorization": `Bearer ${token}`,
+                "Accept": "application/json"
+            }
+        });
+    } catch (e) {
+        console.log("Logout error di backend (abaikan)", e);
+    }
+
     setTimeout(() => {
       forceLogout();
-    }, 1200);
+    }, 500);
   };
 
   const getInitial = (name = "") => {
@@ -301,9 +294,7 @@ const Sidebar = () => {
     w-9 h-9 text-gray-700
     transition-all duration-300 transform focus:outline-none
     ${isSidebarOpen
-            // SAAT SIDEBAR TERBUKA → X DI DALAM KOTAK PUTIH
             ? "rounded-lg bg-white/90 shadow-sm hover:bg-gray-100 translate-x-64"
-            // SAAT SIDEBAR TERTUTUP → HANYA GARIS 3 TANPA KOTAK
             : "bg-transparent shadow-none translate-x-0"
           }
   `}
