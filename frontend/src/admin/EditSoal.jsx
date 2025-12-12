@@ -21,7 +21,7 @@ import {
   downloadWorkbook,
 } from "../admin/TemplateExcel";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // =======================================================
 // KONFIGURASI TIPE FILE (SAMA DENGAN TambahSoal.jsx)

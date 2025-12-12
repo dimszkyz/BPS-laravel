@@ -11,7 +11,7 @@ import {
   FaFileAlt,
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // ------------------------------------------------------------------
 // HELPER DARI HasilUjian.jsx

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaEnvelope, FaKey, FaSignInAlt, FaSpinner } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 const defaultBgPeserta = "bg-gray-50";
 
 const LoginPeserta = () => {

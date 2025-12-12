@@ -14,7 +14,7 @@ import {
 } from "react-icons/fa";
 import ImageUploadBox from "./ImageUploadBox";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 /** Komponen Notifikasi Halaman */
 const PageAlert = ({ type, text, onClose }) => {

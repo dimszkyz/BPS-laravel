@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { FaSpinner } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 /**
  * Header Global yang mengambil data (logo & teks) dari API.

@@ -20,7 +20,7 @@ import {
 } from "react-icons/fa";
 import * as XLSX from "xlsx";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // ---------- Helpers (Diambil dari HasilUjian.jsx) ----------
 const formatTanggal = (isoString) => {

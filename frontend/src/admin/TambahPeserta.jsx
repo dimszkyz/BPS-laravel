@@ -16,7 +16,7 @@ import {
 import DaftarUndangan from "./DaftarUndangan";
 import EmailPengirim from "./EmailPengirim";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // Helper validasi email sederhana
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

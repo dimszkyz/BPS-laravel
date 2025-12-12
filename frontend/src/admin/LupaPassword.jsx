@@ -15,7 +15,7 @@ import {
 
 import Header from "../component/header";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 const FORGOT_PW_ENDPOINT = "/api/admin/forgot-password";
 
 /** Notifikasi kecil (success / error) */

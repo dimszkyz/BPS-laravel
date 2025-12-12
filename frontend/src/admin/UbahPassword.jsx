@@ -14,7 +14,7 @@ import {
 import { jwtDecode } from "jwt-decode";
 import PermintaanResetPassword from "./PermintaanResetPassword";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 const CHANGE_PW_ENDPOINT = "/api/admin/change-password";
 
 // Komponen Pesan Notifikasi (Memoized)

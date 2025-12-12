@@ -347,7 +347,7 @@ const TambahSoal = () => {
 
     try {
       const token = getAdminToken();
-      const res = await fetch("http://localhost:5000/api/ujian", {
+      const res = await fetch("http://localhost:8000/api/ujian", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

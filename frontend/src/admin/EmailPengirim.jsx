@@ -10,7 +10,7 @@ import {
   FaInfoCircle,
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 const EmailPengirim = ({ onClose }) => {
   const [smtpSettings, setSmtpSettings] = useState({

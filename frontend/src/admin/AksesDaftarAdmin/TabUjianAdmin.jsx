@@ -10,7 +10,7 @@ import {
     FaCheckCircle
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // ===============================================
 // KOMPONEN MODAL (Sama seperti di DaftarSoal)

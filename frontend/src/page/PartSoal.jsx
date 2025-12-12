@@ -23,7 +23,7 @@ import {
 } from "react-icons/fa";
 import SubmitUjianModal from "../component/submitujian.jsx";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // --- FUNGSI SHUFFLE ---
 const shuffleArray = (array) => {

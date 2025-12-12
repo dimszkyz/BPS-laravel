@@ -12,7 +12,7 @@ import {
   FaExclamationTriangle // Tambahan icon untuk modal
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // --- KOMPONEN MODAL KONFIRMASI (Sama seperti di TabUjianAdmin) ---
 const KonfirmasiModal = ({ show, message, onCancel, onConfirm }) => {

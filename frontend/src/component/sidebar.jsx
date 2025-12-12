@@ -18,7 +18,7 @@ import {
 } from "react-icons/fa";
 import { jwtDecode } from "jwt-decode";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 const Sidebar = () => {
   const [hasNewResult, setHasNewResult] = useState(false);

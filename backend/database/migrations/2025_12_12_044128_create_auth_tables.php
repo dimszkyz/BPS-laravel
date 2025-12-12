@@ -6,22 +6,34 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('auth_tables', function (Blueprint $table) {
+        // 1. Tabel Admins (Sesuai routes/adminList.js)
+        Schema::create('admins', function (Blueprint $table) {
             $table->id();
+            $table->string('username');
+            $table->string('email')->unique();
+            $table->string('password'); // Password admin
+            $table->enum('role', ['superadmin', 'admin'])->default('admin');
+            $table->boolean('is_active')->default(true);
+            $table->timestamps(); // created_at & updated_at
+        });
+
+        // 2. Tabel Peserta (Sesuai routes/peserta.js)
+        Schema::create('peserta', function (Blueprint $table) {
+            $table->id();
+            $table->string('nama');
+            $table->string('nohp');
+            $table->string('email');
+            // Menambahkan password nullable jika nanti dibutuhkan login khusus
+            $table->string('password')->nullable(); 
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('auth_tables');
+        Schema::dropIfExists('peserta');
+        Schema::dropIfExists('admins');
     }
 };

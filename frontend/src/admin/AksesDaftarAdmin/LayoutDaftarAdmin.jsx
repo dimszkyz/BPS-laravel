@@ -19,7 +19,7 @@ import TabUjianAdmin from "./TabUjianAdmin";
 import TabUndanganAdmin from "./TabUndanganAdmin";
 import TabHasilAdmin from "./TabHasilAdmin";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "http://localhost:8000";
 
 // ==========================================
 // KOMPONEN UTAMA: LAYOUT DAFTAR ADMIN
