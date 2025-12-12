@@ -65,11 +65,12 @@ const LoginAdmin = () => {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
+          "Accept": "application/json",
           "Cache-Control": "no-cache, no-store, must-revalidate", // Paksa request baru
           "Pragma": "no-cache",
           "Expires": "0"
         },
-        body: JSON.stringify({ username, password, captcha }),
+        body: JSON.stringify({ email: username, password, captcha }),
       });
 
       let data = {};
@@ -85,18 +86,14 @@ const LoginAdmin = () => {
       if (!res.ok) throw new Error(data.message || "Gagal login.");
 
       // 2. VALIDASI TOKEN: Cek apakah token yang diterima benar-benar BARU
-      const decoded = jwtDecode(data.token);
-      const currentTime = Date.now() / 1000;
+      sessionStorage.clear(); 
+      sessionStorage.setItem("adminToken", data.token);
+      sessionStorage.setItem("adminData", JSON.stringify(data.admin)); // Pastikan backend mengirim 'admin'
       
-      console.log("Login Token Check:", {
-        exp: decoded.exp,
-        now: currentTime,
-        isValid: decoded.exp > currentTime
-      });
-
-      if (decoded.exp < currentTime) {
-        throw new Error("Server memberikan token yang sudah kadaluwarsa. Periksa jam server.");
-      }
+      // 4. Beri waktu sedikit lebih lama agar storage tersinkronisasi
+      setTimeout(() => {
+        navigate("/admin/dashboard", { replace: true });
+      }, 300);
 
       // 3. Simpan Token Baru
       sessionStorage.clear(); // Pastikan bersih 100%

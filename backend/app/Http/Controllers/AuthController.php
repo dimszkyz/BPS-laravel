@@ -16,19 +16,25 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // 1. Validasi Input
+        // 1. Validasi Input (HAPUS '|email' agar username biasa diterima)
         $request->validate([
-            'email' => 'required|email',
+            'email' => 'required', // Tidak perlu |email, agar string biasa bisa masuk
             'password' => 'required',
         ]);
 
-        // 2. Cari Admin berdasarkan Email
-        $admin = Admin::where('email', $request->email)->first();
+        // 2. Cari Admin (Cek di kolom email ATAU username)
+        $input = $request->email; // Frontend mengirim key 'email', isinya bisa username/email
+
+        $admin = Admin::where(function($query) use ($input) {
+                        $query->where('email', $input)
+                              ->orWhere('username', $input);
+                    })->first();
 
         // 3. Cek Password & Keberadaan User
         if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([
-                'message' => 'Email atau password salah.'
+                // Pesan error lebih umum
+                'message' => 'Username/Email atau password salah.' 
             ], 401);
         }
 
@@ -42,11 +48,11 @@ class AuthController extends Controller
         // 5. Generate Token
         $token = $admin->createToken('admin-token')->plainTextToken;
 
-        // 6. Kirim Response (PERBAIKAN DISINI: key 'user' diganti 'admin')
+        // 6. Kirim Response
         return response()->json([
             'message' => 'Login berhasil',
             'token' => $token,
-            'admin' => [ // <-- Sesuai dengan LoginAdmin.jsx
+            'admin' => [
                 'id' => $admin->id,
                 'username' => $admin->username,
                 'email' => $admin->email,

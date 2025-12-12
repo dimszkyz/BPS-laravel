@@ -13,8 +13,7 @@ use Illuminate\Support\Facades\Log;
 class UjianController extends Controller
 {
     /**
-     * Helper: Parse data dari request (mirip logic parseBodyData di Node.js)
-     * Frontend mengirim 'data' sebagai JSON String di dalam FormData
+     * Helper: Parse data dari request
      */
     private function parseData($request)
     {
@@ -27,13 +26,12 @@ class UjianController extends Controller
 
     /**
      * GET /api/ujian
-     * List semua ujian (Admin)
+     * List semua ujian
      */
     public function index(Request $request)
     {
         $user = $request->user();
         
-        // Logika Superadmin melihat ujian admin lain
         $targetAdminId = $request->query('target_admin_id');
         $adminIdToQuery = $user->id;
 
@@ -51,21 +49,18 @@ class UjianController extends Controller
 
     /**
      * POST /api/ujian
-     * Simpan ujian baru beserta soal & opsi
+     * Simpan ujian baru
      */
     public function store(Request $request)
     {
-        // 1. Ambil data JSON dari FormData
         $data = $this->parseData($request);
 
-        // Validasi manual karena data ada dalam JSON string
         if (empty($data['keterangan']) || empty($data['durasi']) || empty($data['soalList'])) {
             return response()->json(['message' => 'Data ujian tidak lengkap.'], 400);
         }
 
         DB::beginTransaction();
         try {
-            // 2. Simpan Header Ujian
             $exam = Exam::create([
                 'keterangan' => $data['keterangan'],
                 'tanggal' => $data['tanggal'],
@@ -78,23 +73,17 @@ class UjianController extends Controller
                 'admin_id' => $request->user()->id,
             ]);
 
-            // 3. Loop Soal-soal
             foreach ($data['soalList'] as $index => $soalData) {
-                // Handle Upload Gambar per Soal
-                // Frontend mengirim file dengan key: gambar_0, gambar_1, dst.
                 $gambarPath = null;
                 $fileKey = "gambar_" . $index;
                 
                 if ($request->hasFile($fileKey)) {
-                    // Upload ke folder public/uploads
                     $path = $request->file($fileKey)->store('uploads', 'public');
-                    $gambarPath = '/storage/' . $path; // URL yang bisa diakses frontend
+                    $gambarPath = '/storage/' . $path;
                 } elseif (!empty($soalData['gambar'])) {
-                    // Jika gambar berupa string (URL lama/text)
                     $gambarPath = $soalData['gambar'];
                 }
 
-                // Config untuk tipe soal dokumen
                 $fileConfig = null;
                 if (($soalData['tipeSoal'] ?? '') === 'soalDokumen') {
                     $fileConfig = [
@@ -104,35 +93,27 @@ class UjianController extends Controller
                     ];
                 }
 
-                // Simpan Soal
                 $question = Question::create([
                     'exam_id' => $exam->id,
                     'tipe_soal' => $soalData['tipeSoal'] ?? '',
                     'soal_text' => $soalData['soalText'] ?? '',
                     'gambar' => $gambarPath,
-                    'file_config' => $fileConfig, // Cast otomatis ke JSON oleh Model
+                    'file_config' => $fileConfig,
                     'bobot' => (int) ($soalData['bobot'] ?? 1),
                 ]);
 
-                // 4. Simpan Opsi Jawaban (Pilihan Ganda / Teks Singkat)
                 if (in_array($soalData['tipeSoal'], ['pilihanGanda', 'teksSingkat'])) {
-                    
-                    // Logika Pilihan Ganda
                     if ($soalData['tipeSoal'] === 'pilihanGanda' && !empty($soalData['pilihan'])) {
                         $kunci = trim($soalData['kunciJawabanText'] ?? '');
-                        
                         foreach ($soalData['pilihan'] as $opsiItem) {
                             $teksOpsi = is_array($opsiItem) ? ($opsiItem['text'] ?? '') : $opsiItem;
-                            
                             Option::create([
                                 'question_id' => $question->id,
                                 'opsi_text' => $teksOpsi,
                                 'is_correct' => trim($teksOpsi) === $kunci
                             ]);
                         }
-                    } 
-                    // Logika Teks Singkat
-                    elseif ($soalData['tipeSoal'] === 'teksSingkat' && !empty($soalData['kunciJawabanText'])) {
+                    } elseif ($soalData['tipeSoal'] === 'teksSingkat' && !empty($soalData['kunciJawabanText'])) {
                         Option::create([
                             'question_id' => $question->id,
                             'opsi_text' => $soalData['kunciJawabanText'],
@@ -153,29 +134,148 @@ class UjianController extends Controller
     }
 
     /**
+     * PUT /api/ujian/:id
+     * Update ujian (Logika Baru)
+     */
+    public function update(Request $request, $id)
+    {
+        $data = $this->parseData($request);
+        $user = $request->user();
+
+        $exam = Exam::find($id);
+        if (!$exam) {
+            return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
+        }
+
+        if ($user->role !== 'superadmin' && $exam->admin_id !== $user->id) {
+            return response()->json(['message' => 'Akses ditolak.'], 403);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Update Header
+            $exam->update([
+                'keterangan' => $data['keterangan'],
+                'tanggal' => $data['tanggal'],
+                'tanggal_berakhir' => $data['tanggalBerakhir'],
+                'jam_mulai' => $data['jamMulai'],
+                'jam_berakhir' => $data['jamBerakhir'],
+                'durasi' => (int) $data['durasi'],
+                'acak_soal' => filter_var($data['acakSoal'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'acak_opsi' => filter_var($data['acakOpsi'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ]);
+
+            // Sinkronisasi Soal
+            $sentSoalIds = [];
+            
+            if (isset($data['soalList']) && is_array($data['soalList'])) {
+                foreach ($data['soalList'] as $index => $soalData) {
+                    $question = null;
+
+                    // Cek ID soal lama
+                    if (!empty($soalData['id']) && $soalData['id'] > 0) {
+                        $question = Question::where('id', $soalData['id'])
+                                            ->where('exam_id', $exam->id)
+                                            ->first();
+                        if ($question) {
+                            $sentSoalIds[] = $question->id;
+                        }
+                    }
+
+                    // Handle Gambar
+                    $fileKey = "gambar_" . $index;
+                    $gambarPath = null;
+                    if ($request->hasFile($fileKey)) {
+                        $path = $request->file($fileKey)->store('uploads', 'public');
+                        $gambarPath = '/storage/' . $path;
+                    } elseif (!empty($soalData['gambar'])) {
+                        $gambarPath = $soalData['gambar'];
+                    }
+
+                    // Config
+                    $fileConfig = null;
+                    if (($soalData['tipeSoal'] ?? '') === 'soalDokumen') {
+                        $fileConfig = [
+                            'allowedTypes' => $soalData['allowedTypes'] ?? [],
+                            'maxSize' => $soalData['maxSize'] ?? 5,
+                            'maxCount' => $soalData['maxCount'] ?? 1
+                        ];
+                    }
+
+                    $qData = [
+                        'exam_id' => $exam->id,
+                        'tipe_soal' => $soalData['tipeSoal'] ?? '',
+                        'soal_text' => $soalData['soalText'] ?? '',
+                        'gambar' => $gambarPath,
+                        'file_config' => $fileConfig,
+                        'bobot' => (int) ($soalData['bobot'] ?? 1),
+                    ];
+
+                    if ($question) {
+                        $question->update($qData);
+                        $question->options()->delete(); // Reset opsi lama
+                    } else {
+                        $question = Question::create($qData);
+                        $sentSoalIds[] = $question->id;
+                    }
+
+                    // Simpan Opsi Baru
+                    if (in_array($soalData['tipeSoal'], ['pilihanGanda', 'teksSingkat'])) {
+                        if ($soalData['tipeSoal'] === 'pilihanGanda' && !empty($soalData['pilihan'])) {
+                            $kunci = trim($soalData['kunciJawabanText'] ?? '');
+                            foreach ($soalData['pilihan'] as $opsiItem) {
+                                $teksOpsi = is_array($opsiItem) ? ($opsiItem['text'] ?? '') : $opsiItem;
+                                Option::create([
+                                    'question_id' => $question->id,
+                                    'opsi_text' => $teksOpsi,
+                                    'is_correct' => trim($teksOpsi) === $kunci
+                                ]);
+                            }
+                        } elseif ($soalData['tipeSoal'] === 'teksSingkat' && !empty($soalData['kunciJawabanText'])) {
+                            Option::create([
+                                'question_id' => $question->id,
+                                'opsi_text' => $soalData['kunciJawabanText'],
+                                'is_correct' => true
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // Hapus Soal yang tidak dikirim (dihapus user)
+            Question::where('exam_id', $exam->id)
+                    ->whereNotIn('id', $sentSoalIds)
+                    ->delete();
+
+            DB::commit();
+            return response()->json(['message' => 'Ujian berhasil diperbarui']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Gagal update ujian: ' . $e->getMessage());
+            return response()->json(['message' => 'Gagal update ujian.', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * GET /api/ujian/:id
-     * Detail Ujian untuk Edit (Admin)
+     * Detail Ujian
      */
     public function show(Request $request, $id)
     {
         $user = $request->user();
-        
         $exam = Exam::with(['questions.options'])->find($id);
 
         if (!$exam) {
             return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
         }
 
-        // Cek kepemilikan
         if ($user->role !== 'superadmin' && $exam->admin_id !== $user->id) {
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
 
-        // Format data agar sesuai dengan format yang diharapkan Frontend React
         $soalList = $exam->questions->map(function($q) {
             $pilihan = [];
-            
-            // Format ulang pilihan ganda
             if ($q->tipe_soal === 'pilihanGanda' || $q->tipe_soal === 'teksSingkat') {
                 $pilihan = $q->options->map(function($opt) {
                     return [
@@ -186,7 +286,6 @@ class UjianController extends Controller
                 });
             }
 
-            // Ambil config file jika ada
             $config = $q->file_config ?? [];
 
             return [
@@ -207,7 +306,7 @@ class UjianController extends Controller
             'keterangan' => $exam->keterangan,
             'tanggal' => $exam->tanggal,
             'tanggal_berakhir' => $exam->tanggal_berakhir,
-            'jam_mulai' => $exam->jam_mulai, // Laravel return format H:i:s
+            'jam_mulai' => $exam->jam_mulai,
             'jam_berakhir' => $exam->jam_berakhir,
             'acak_soal' => $exam->acak_soal,
             'acak_opsi' => $exam->acak_opsi,
@@ -218,7 +317,7 @@ class UjianController extends Controller
 
     /**
      * DELETE /api/ujian/:id
-     * Soft delete ujian
+     * Soft delete
      */
     public function destroy(Request $request, $id)
     {
@@ -227,7 +326,6 @@ class UjianController extends Controller
             return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
         }
 
-        // Cek kepemilikan
         if ($request->user()->role !== 'superadmin' && $exam->admin_id !== $request->user()->id) {
             return response()->json(['message' => 'Akses ditolak.'], 403);
         }
