@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Admin;
+use App\Models\Peserta;
+use App\Models\HasilUjian;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +26,6 @@ class AuthController extends Controller
         $admin = Admin::where('email', $request->email)->first();
 
         // 3. Cek Password & Keberadaan User
-        // Hash::check otomatis mencocokkan password input dengan hash bcrypt di DB
         if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([
                 'message' => 'Email atau password salah.'
@@ -38,15 +39,14 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // 5. Generate Token (Pengganti jwt.sign)
-        // 'admin-token' adalah nama token, bisa apa saja
+        // 5. Generate Token
         $token = $admin->createToken('admin-token')->plainTextToken;
 
-        // 6. Kirim Response
+        // 6. Kirim Response (PERBAIKAN DISINI: key 'user' diganti 'admin')
         return response()->json([
             'message' => 'Login berhasil',
-            'token' => $token, // Ini yang akan disimpan Frontend di localStorage
-            'user' => [
+            'token' => $token,
+            'admin' => [ // <-- Sesuai dengan LoginAdmin.jsx
                 'id' => $admin->id,
                 'username' => $admin->username,
                 'email' => $admin->email,
@@ -56,7 +56,40 @@ class AuthController extends Controller
     }
 
     /**
-     * Get Current User Info (Pengganti verifyAdmin middleware check)
+     * Login Peserta (Berdasarkan Email & Kode Login)
+     */
+    public function loginPeserta(Request $request)
+    {
+        // 1. Validasi
+        $request->validate([
+            'email' => 'required|email',
+            'login_code' => 'required',
+        ]);
+
+        // 2. Cari Peserta
+        $peserta = Peserta::where('email', $request->email)->first();
+
+        // 3. Cek Kecocokan Password / Kode Login
+        // Menggunakan perbandingan langsung string (sesuai logika kode login)
+        if (!$peserta || $peserta->password !== $request->login_code) {
+             return response()->json(['message' => 'Email atau Kode Login salah.'], 401);
+        }
+
+        // 4. Cari Ujian Aktif untuk Peserta ini (mengambil ujian terakhir yang dikerjakan)
+        $activeExamId = HasilUjian::where('peserta_id', $peserta->id)
+                        ->latest('created_at')
+                        ->value('exam_id'); 
+
+        return response()->json([
+            'message' => 'Login berhasil',
+            'email' => $peserta->email,
+            'examId' => $activeExamId ?? 0,
+            'peserta' => $peserta
+        ]);
+    }
+
+    /**
+     * Get Current User Info
      */
     public function me(Request $request)
     {
@@ -68,9 +101,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        // Hapus token yang sedang digunakan saat ini
         $request->user()->currentAccessToken()->delete();
-
         return response()->json(['message' => 'Logout berhasil']);
     }
 }
