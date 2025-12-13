@@ -7,6 +7,7 @@ use App\Models\Peserta;
 use App\Models\HasilUjian;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http; // Tambahan untuk Request ke Google
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -16,39 +17,59 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        // 1. Validasi Input (HAPUS '|email' agar username biasa diterima)
+        // 1. Validasi Input (Username/Email, Password, dan Captcha)
         $request->validate([
-            'email' => 'required', // Tidak perlu |email, agar string biasa bisa masuk
+            'email' => 'required',
             'password' => 'required',
+            'captcha' => 'required', // Wajib ada untuk keamanan
         ]);
 
-        // 2. Cari Admin (Cek di kolom email ATAU username)
-        $input = $request->email; // Frontend mengirim key 'email', isinya bisa username/email
+        // 2. Verifikasi ReCAPTCHA ke Google
+        $recaptchaSecret = env('RECAPTCHA_SECRET_KEY');
+        
+        // Hanya verifikasi jika key ada di .env (untuk dev mode bisa dikosongkan jika perlu bypass)
+        if ($recaptchaSecret) {
+            try {
+                $response = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                    'secret' => $recaptchaSecret,
+                    'response' => $request->captcha,
+                ]);
+
+                if (!$response->json()['success']) {
+                    return response()->json(['message' => 'Verifikasi captcha gagal.'], 403);
+                }
+            } catch (\Exception $e) {
+                // Opsional: Log error jika gagal connect ke Google
+                return response()->json(['message' => 'Gagal memverifikasi captcha (Network Error).'], 500);
+            }
+        }
+
+        // 3. Cari Admin (Cek di kolom email ATAU username)
+        $input = $request->email; 
 
         $admin = Admin::where(function($query) use ($input) {
                         $query->where('email', $input)
                               ->orWhere('username', $input);
                     })->first();
 
-        // 3. Cek Password & Keberadaan User
+        // 4. Cek Password & Keberadaan User
         if (! $admin || ! Hash::check($request->password, $admin->password)) {
             return response()->json([
-                // Pesan error lebih umum
                 'message' => 'Username/Email atau password salah.' 
             ], 401);
         }
 
-        // 4. Cek Status Aktif
+        // 5. Cek Status Aktif
         if (!$admin->is_active) {
             return response()->json([
                 'message' => 'Akun Anda telah dinonaktifkan.'
             ], 403);
         }
 
-        // 5. Generate Token
+        // 6. Generate Token
         $token = $admin->createToken('admin-token')->plainTextToken;
 
-        // 6. Kirim Response
+        // 7. Kirim Response
         return response()->json([
             'message' => 'Login berhasil',
             'token' => $token,

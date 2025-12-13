@@ -46,6 +46,7 @@ const formatTipeSoal = (tipe) => {
       return "Pilihan Ganda";
     case "teksSingkat":
       return "Isian Singkat";
+      case "esai":
     case "esay":
       return "Esai";
     case "soalDokumen":
@@ -109,12 +110,12 @@ const getAdminContext = () => {
   };
 };
 
-// Grouping by exam -> peserta
 const groupDataByUjianThenPeserta = (data) => {
   const groupedByExam = data.reduce((acc, row) => {
     const examId = row.exam_id ?? "unknown";
     const pesertaId = row.peserta_id;
-    const bobotSoal = row.bobot || 1; // Ambil bobot dari backend
+    const bobotSoal = row.bobot || 1;
+    const questionId = row.question_id; // Pastikan ambil question_id
 
     if (!acc[examId]) {
       acc[examId] = {
@@ -131,28 +132,27 @@ const groupDataByUjianThenPeserta = (data) => {
         email: row.email,
         pg_benar: 0,
         total_pg: 0,
-        
-        // Untuk perhitungan Nilai Akhir (%)
         total_bobot_maksimal: 0,
         total_bobot_diperoleh: 0,
-
-        // Untuk tampilan "Soal Benar" (Kuantitas)
         total_soal_count: 0, 
         total_benar_count: 0,
-        
-        // Untuk mencatat tipe soal apa saja yang ada
         tipe_soal_set: new Set(),
-
+        processed_questions: new Set(), // BARU: Set pelacak
         submitted_at: row.created_at,
       };
     }
 
-    // Catat tipe soal ke dalam Set (biar unik)
+    // --- PERBAIKAN: Cek Duplikasi Soal ---
+    if (acc[examId].peserta_map[pesertaId].processed_questions.has(questionId)) {
+        return acc; // Lewati jika soal ini sudah dihitung
+    }
+    acc[examId].peserta_map[pesertaId].processed_questions.add(questionId);
+    // -------------------------------------
+
     if (row.tipe_soal) {
       acc[examId].peserta_map[pesertaId].tipe_soal_set.add(row.tipe_soal);
     }
 
-    // Hitung statistik khusus PG (legacy/opsional)
     if (row.tipe_soal === "pilihanGanda" || row.tipe_soal === "teksSingkat") {
       acc[examId].peserta_map[pesertaId].total_pg += 1;
       if (row.benar) {
@@ -160,13 +160,13 @@ const groupDataByUjianThenPeserta = (data) => {
       }
     }
     
-    // 1. Hitung Bobot (Untuk Nilai Persentase)
+    // Hitung Bobot
     acc[examId].peserta_map[pesertaId].total_bobot_maksimal += bobotSoal;
     if (row.benar) {
       acc[examId].peserta_map[pesertaId].total_bobot_diperoleh += bobotSoal;
     }
 
-    // 2. Hitung Kuantitas Soal (Untuk Kolom "Soal Benar")
+    // Hitung Kuantitas Soal
     acc[examId].peserta_map[pesertaId].total_soal_count += 1;
     if (row.benar) {
       acc[examId].peserta_map[pesertaId].total_benar_count += 1;
@@ -179,7 +179,6 @@ const groupDataByUjianThenPeserta = (data) => {
     const examGroup = groupedByExam[examId];
     examGroup.list_peserta = Object.values(examGroup.peserta_map).map(
       (peserta) => {
-        // Hitung skor berdasarkan Bobot (Agar sinkron dengan HasilAkhir.jsx)
         const nilaiAkhirBobot =
           peserta.total_bobot_maksimal > 0
             ? Number(
@@ -191,22 +190,23 @@ const groupDataByUjianThenPeserta = (data) => {
               )
             : 0;
             
-        // Skor PG Lama (sekadar referensi jika dibutuhkan)
         const skorPgLama =
           peserta.total_pg > 0
             ? Number(((peserta.pg_benar / peserta.total_pg) * 100).toFixed(0))
             : 0;
         
-        // Convert Set tipe soal menjadi string yang rapi
         const listTipeSoal = Array.from(peserta.tipe_soal_set)
           .map(t => formatTipeSoal(t))
           .join(", ");
 
+        // Bersihkan properti internal
+        const { processed_questions, ...cleanPeserta } = peserta;
+
         return {
-          ...peserta,
+          ...cleanPeserta,
           skor_pg: skorPgLama, 
-          nilai_akhir_bobot: nilaiAkhirBobot, // Nilai % tetap pakai bobot
-          tipe_soal_string: listTipeSoal, // String daftar tipe soal
+          nilai_akhir_bobot: nilaiAkhirBobot,
+          tipe_soal_string: listTipeSoal,
         };
       }
     );
@@ -247,7 +247,7 @@ const barColor = (v) => {
 
 // ---------- helper export baru ----------
 const statusJawabanExport = (row) => {
-  if (row.tipe_soal === "esay" || row.tipe_soal === "soalDokumen")
+  if (row.tipe_soal === "esai" || row.tipe_soal === "esay" || row.tipe_soal === "soalDokumen")
     return "Manual / Belum Dinilai";
   return row.benar ? "Benar" : "Salah";
 };

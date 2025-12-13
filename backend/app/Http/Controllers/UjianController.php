@@ -496,4 +496,24 @@ class UjianController extends Controller
             'soalList' => $soalList
         ]);
     }
+
+    public function uploadPeserta(Request $request)
+    {
+        if ($request->hasFile('file')) {
+            try {
+                $file = $request->file('file');
+                // Simpan ke folder public/uploads_jawaban
+                $path = $file->store('uploads_jawaban', 'public');
+                
+                return response()->json([
+                    'message' => 'Upload berhasil',
+                    'filePath' => '/storage/' . $path, // Path relatif untuk disimpan di DB
+                    'originalName' => $file->getClientOriginalName()
+                ]);
+            } catch (\Exception $e) {
+                return response()->json(['message' => 'Gagal upload file: ' . $e->getMessage()], 500);
+            }
+        }
+        return response()->json(['message' => 'Tidak ada file yang dikirim'], 400);
+    }
 }

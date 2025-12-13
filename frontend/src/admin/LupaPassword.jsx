@@ -1,4 +1,4 @@
-// File: src/admin/LupaPassword.jsx (UPDATED: placeholder gray transparent)
+// File: src/admin/LupaPassword.jsx
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -58,7 +58,7 @@ const LupaPassword = () => {
   const [isSending, setIsSending] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
 
-  // biar footer snippet kamu gak error walau bg belum dipakai di halaman ini
+  // Placeholder untuk bgUrl agar footer tetap konsisten
   const bgUrl = null;
 
   const dismissMessage = useCallback(() => {
@@ -95,7 +95,11 @@ const LupaPassword = () => {
     try {
       const res = await fetch(`${API_URL}${FORGOT_PW_ENDPOINT}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+            "Content-Type": "application/json",
+            // [PENTING] Header ini mencegah redirect 302 saat validasi gagal (CORS Fix)
+            "Accept": "application/json" 
+        },
         body: JSON.stringify({
           identifier: identifier.trim(),
           whatsapp: whatsapp.trim(),

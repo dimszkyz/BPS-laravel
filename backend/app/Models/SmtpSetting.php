@@ -9,6 +9,7 @@ class SmtpSetting extends Model
     protected $table = 'smtp_settings';
 
     protected $fillable = [
+        'user_id', // <--- Tambahkan ini
         'service',
         'host',
         'port',

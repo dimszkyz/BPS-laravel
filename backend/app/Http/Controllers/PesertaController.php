@@ -40,18 +40,22 @@ class PesertaController extends Controller
 
     /**
      * POST /api/peserta
-     * Simpan peserta baru (Manual)
+     * Simpan peserta BARU setiap kali dipanggil (Logic Node.js)
+     * Ini membuat setiap sesi ujian memiliki ID Peserta unik, sehingga hasil tidak tertimpa.
      */
     public function store(Request $request)
     {
         $request->validate([
             'nama' => 'required',
             'nohp' => 'required',
-            'email' => 'required|email|unique:peserta,email',
+            'email' => 'required|email', 
         ]);
 
         try {
-            // [FIX] Masukkan password default agar Database tidak error
+            // [UBAH LOGIC] Langsung buat baru (Create) tanpa cek existing email.
+            // Ini memastikan setiap kali user klik "Mulai Ujian", mereka dapat ID baru.
+            // Hasilnya: Di dashboard admin akan muncul baris baru untuk email yang sama.
+            
             $peserta = Peserta::create([
                 'nama' => $request->nama,
                 'nohp' => $request->nohp,
@@ -61,17 +65,28 @@ class PesertaController extends Controller
 
             return response()->json([
                 'id' => $peserta->id, 
-                'message' => 'Peserta berhasil disimpan ✅'
+                'message' => 'Peserta berhasil disimpan (Sesi Baru) ✅'
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error("Gagal simpan peserta: " . $e->getMessage());
+            
+            // Tangani error jika database masih memaksa UNIQUE pada email
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                return response()->json([
+                    'message' => 'Gagal: Email ini sudah terdaftar & Database melarang duplikat. Harap hapus index UNIQUE pada kolom email di tabel peserta.',
+                    'error' => 'Duplicate Entry'
+                ], 409);
+            }
+
             return response()->json(['message' => 'Gagal menyimpan data peserta.', 'error' => $e->getMessage()], 500);
         }
     }
 
     /**
      * PUT /api/peserta/:id
-     * Update data peserta
+     * Update data peserta (Route manual via ID)
+     * Dipakai jika user kembali ke halaman form dan mengedit data SEBELUM ujian dimulai
      */
     public function update(Request $request, $id)
     {
@@ -83,7 +98,7 @@ class PesertaController extends Controller
         $request->validate([
             'nama' => 'required',
             'nohp' => 'required',
-            'email' => 'required|email|unique:peserta,email,' . $id,
+            'email' => 'required|email',
         ]);
 
         try {

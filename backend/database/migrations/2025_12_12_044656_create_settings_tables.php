@@ -17,6 +17,8 @@ return new class extends Migration
         // 2. SMTP Settings (Untuk Email)
         Schema::create('smtp_settings', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('user_id')->nullable()->index(); 
+            
             $table->string('service')->default('gmail');
             $table->string('host');
             $table->integer('port')->default(587);

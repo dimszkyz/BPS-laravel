@@ -1,4 +1,4 @@
-// File: src/admin/PermintaanResetPassword.jsx (UPDATED: Date only + reason wrap)
+// File: src/admin/PermintaanResetPassword.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   FaUserShield,
@@ -15,19 +15,21 @@ import {
 
 const API_URL = "http://localhost:8000";
 const GET_REQUESTS_ENDPOINT = "/api/admin/forgot-password/requests";
-const RESET_ENDPOINT = (id) => `/api/admin/forgot-password/requests/${id}/reset`;
+const RESET_ENDPOINT = "/api/admin/forgot-password/approve";
 
 const Badge = ({ status }) => {
   const s = (status || "").toLowerCase();
   const map = {
     pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    resolved: "bg-green-50 text-green-700 border-green-200",
+    approved: "bg-green-50 text-green-700 border-green-200", // [UPDATE] Tambahkan approved
+    resolved: "bg-green-50 text-green-700 border-green-200", // Legacy support
     rejected: "bg-red-50 text-red-700 border-red-200",
   };
   const label = {
     pending: "Pending",
+    approved: "Selesai", // [UPDATE] Label untuk approved
     resolved: "Selesai",
-    // rejected: "Ditolak",
+    rejected: "Ditolak",
   };
   return (
     <span
@@ -80,7 +82,7 @@ const formatTanggalOnly = (iso) => {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("id-ID"); // contoh: 23/11/2025
+  return d.toLocaleDateString("id-ID"); 
 };
 
 const PermintaanResetPassword = () => {
@@ -117,6 +119,7 @@ const PermintaanResetPassword = () => {
       if (!res.ok)
         throw new Error(data.message || "Gagal memuat permintaan reset.");
 
+      // Pastikan data array
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setFetchErr(e.message || "Terjadi kesalahan.");
@@ -132,11 +135,21 @@ const PermintaanResetPassword = () => {
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      const okStatus =
-        filterStatus === "all" ||
-        (r.status || "").toLowerCase() === filterStatus;
-      if (!okStatus) return false;
+      // Logic Filter Status:
+      // Jika user pilih 'approved', kita anggap 'resolved' juga sama (legacy)
+      const rStatus = (r.status || "").toLowerCase();
+      let matchesStatus = true;
 
+      if (filterStatus !== "all") {
+        if (filterStatus === "approved") {
+            // Tampilkan status 'approved' ATAU 'resolved'
+            matchesStatus = rStatus === "approved" || rStatus === "resolved";
+        } else {
+            matchesStatus = rStatus === filterStatus;
+        }
+      }
+      
+      if (!matchesStatus) return false;
       if (!q) return true;
 
       const hay = `${r.username || ""} ${r.email || ""} ${
@@ -172,13 +185,17 @@ const PermintaanResetPassword = () => {
 
     setSavingId(row.id);
     try {
-      const res = await fetch(`${API_URL}${RESET_ENDPOINT(row.id)}`, {
-        method: "PUT",
+      // POST ke endpoint approve
+      const res = await fetch(`${API_URL}${RESET_ENDPOINT}`, {
+        method: "POST", 
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ newPassword: newPw }),
+        body: JSON.stringify({ 
+            id: row.id, 
+            newPassword: newPw 
+        }),
       });
 
       const data = await res.json();
@@ -190,7 +207,7 @@ const PermintaanResetPassword = () => {
       });
       setExpandedId(null);
       setNewPw("");
-      await fetchRequests();
+      await fetchRequests(); // Refresh list agar status berubah jadi 'approved'
     } catch (e) {
       setMsg({ type: "error", text: e.message || "Terjadi kesalahan." });
     } finally {
@@ -241,9 +258,7 @@ const PermintaanResetPassword = () => {
           >
             <option value="all">Semua</option>
             <option value="pending">Pending</option>
-            <option value="resolved">Selesai</option>
-            {/* <option value="rejected">Ditolak</option> */}
-            
+            <option value="approved">Selesai</option> {/* UPDATE: Value sesuai logika filter */}
           </select>
         </div>
 
@@ -283,8 +298,7 @@ const PermintaanResetPassword = () => {
               <tbody>
                 {filteredRows.map((r) => {
                   const isExpanded = expandedId === r.id;
-                  const isPending =
-                    (r.status || "").toLowerCase() === "pending";
+                  const isPending = (r.status || "").toLowerCase() === "pending";
 
                   const waRaw = r.whatsapp || r.identifier || "";
                   const waLink = waRaw
@@ -319,7 +333,6 @@ const PermintaanResetPassword = () => {
                           </div>
                         </td>
 
-                        {/* ✅ Alasan dibatasi lebar & wrap ke bawah */}
                         <td className="py-2 pr-3 text-gray-700 align-top">
                           {r.reason ? (
                             <div className="whitespace-pre-wrap break-words max-w-xs md:max-w-sm leading-relaxed">

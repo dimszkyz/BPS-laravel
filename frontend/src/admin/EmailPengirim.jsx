@@ -46,7 +46,7 @@ const EmailPengirim = ({ onClose }) => {
         from_name: data.from_name || "Admin Ujian",
       });
     } catch (err) {
-      setMsg({ type: "error", text: err.message });
+      console.error("Info SMTP:", err.message); 
     } finally {
       setIsLoading(false);
     }

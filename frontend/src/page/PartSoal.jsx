@@ -465,11 +465,12 @@ const PartSoal = () => {
             id: s.id,
             tipeSoal: s.tipeSoal || "pilihanGanda",
             soalText: s.soalText || "",
-            gambarUrl: s.gambar ? `${API_URL}${s.gambar}` : null,
+            // --- FIX 1: Logika Gambar (Cek apakah sudah ada http) ---
+            gambarUrl: s.gambar 
+                ? (s.gambar.startsWith('http') ? s.gambar : `${API_URL}${s.gambar}`) 
+                : null,
             pilihan: pilihanTerurut,
-            // --- UPDATE: Pastikan fileConfig ada ---
             fileConfig: s.fileConfig || {}, 
-            // ---------------------------------------
           };
         });
 
@@ -1233,7 +1234,8 @@ const PartSoal = () => {
                 )}
 
                 {/* Esai / Teks Singkat */}
-                {(soalAktif?.tipeSoal === "esay" ||
+                {(soalAktif?.tipeSoal === "esai" ||
+                soalAktif?.tipeSoal === "esay" ||
                   soalAktif?.tipeSoal === "teksSingkat") && (
                     <div className="mt-6">
                       <label className="block text-sm font-medium text-gray-700 mb-2">

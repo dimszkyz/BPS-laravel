@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\SmtpSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth; // Tambahkan import ini
 
 class SettingsController extends Controller
 {
@@ -65,8 +66,11 @@ class SettingsController extends Controller
      */
     public function getSmtp()
     {
-        $smtp = SmtpSetting::first();
+        // Ubah pencarian menggunakan Auth::id() agar dikenali editor
+        $smtp = SmtpSetting::where('user_id', Auth::id())->first();
+
         if (!$smtp) {
+            // Jika user ini belum punya setting, return default kosong
             return response()->json([
                 'service' => 'gmail',
                 'host' => 'smtp.gmail.com',
@@ -82,7 +86,7 @@ class SettingsController extends Controller
 
     /**
      * PUT /api/settings/smtp
-     * Update setting SMTP (Admin Only)
+     * Update setting SMTP (Admin Only) - UNIK PER USER
      */
     public function updateSmtp(Request $request)
     {
@@ -91,8 +95,9 @@ class SettingsController extends Controller
             'auth_pass' => 'required',
         ]);
 
+        // Gunakan updateOrCreate dengan Auth::id()
         SmtpSetting::updateOrCreate(
-            ['id' => 1],
+            ['user_id' => Auth::id()], // Kunci pencarian: user yang sedang login
             [
                 'service' => $request->service ?? 'gmail',
                 'host' => $request->host ?? 'smtp.gmail.com',
@@ -104,6 +109,6 @@ class SettingsController extends Controller
             ]
         );
 
-        return response()->json(['message' => 'Pengaturan email berhasil disimpan.']);
+        return response()->json(['message' => 'Pengaturan email berhasil disimpan untuk akun ini.']);
     }
 }

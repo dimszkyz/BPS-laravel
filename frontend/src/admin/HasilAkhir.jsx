@@ -331,7 +331,7 @@ const HasilAkhir = () => {
   const pgAnswers = hasil.filter(
     (h) => h.tipe_soal === "pilihanGanda" || h.tipe_soal === "teksSingkat"
   );
-  const esayAnswers = hasil.filter((h) => h.tipe_soal === "esay");
+  const esayAnswers = hasil.filter((h) => h.tipe_soal === "esai" || h.tipe_soal === "esay");
   const dokumenAnswers = hasil.filter((h) => h.tipe_soal === "soalDokumen");
 
   // Hitung Total Bobot Maksimal (Jika semua benar)
