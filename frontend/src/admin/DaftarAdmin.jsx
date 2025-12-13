@@ -359,7 +359,7 @@ const DaftarAdmin = ({ adminList, isLoading, onRefresh, currentUser, onAddClick 
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {pageRows.map((a) => {
-                      const isActive = a.is_active !== undefined ? a.is_active === 1 : true;
+                      const isActive = a.is_active !== undefined ? (a.is_active === 1 || a.is_active === true) : true;
                       const isSelf = a.id === currentAdminId;
                       const isEditingThis = editingId === a.id;
                       const rowRole = (a.role || "admin").toLowerCase();

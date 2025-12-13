@@ -61,7 +61,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
     
     // Delete Admin
     Route::delete('/admins/{id}', [AdminController::class, 'destroy']);
-    Route::delete('/admin/delete/{id}', [AdminController::class, 'destroy']); // Alias
+    Route::delete('/admin/delete/{id}', [AdminController::class, 'destroy']);
+
+    Route::post('/admin/change-password', [AdminController::class, 'changePassword']);
+    Route::delete('/admins/{id}', [AdminController::class, 'destroy']);
+    Route::delete('/admin/delete/{id}', [AdminController::class, 'destroy']);
 
     // --- UJIAN (Admin) ---
     Route::get('/ujian', [UjianController::class, 'index']);
