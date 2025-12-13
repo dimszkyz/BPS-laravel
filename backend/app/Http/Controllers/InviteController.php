@@ -22,7 +22,7 @@ class InviteController extends Controller
         $smtp = SmtpSetting::first(); 
 
         if (!$smtp) {
-            throw new \Exception("Pengaturan SMTP belum dikonfigurasi.");
+            throw new \Exception("Harap Konfigurasi Email Pengirim di Pengaturan Email.");
         }
 
         // Override konfigurasi mailer Laravel saat runtime
