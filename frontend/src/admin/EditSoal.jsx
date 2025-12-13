@@ -1,4 +1,4 @@
-// File: src/page/EditSoal.jsx
+// File: src/admin/EditSoal.jsx
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -19,7 +19,7 @@ import {
 import {
   generateWorkbookFromState,
   downloadWorkbook,
-} from "../admin/TemplateExcel";
+} from "../admin/TemplateExcel"; // Pastikan path import ini benar sesuai struktur folder Anda
 
 const API_URL = "http://localhost:8000";
 
@@ -35,9 +35,6 @@ const FILE_TYPE_GROUPS = [
 ];
 
 // Normalisasi allowedTypes dari DB / data lama:
-// - Pecah string yang pakai koma (".doc,docx")
-// - Pastikan ada "." di depan
-// - Lowercase & hilangkan duplikat
 const normalizeAllowedTypes = (raw) => {
   if (!Array.isArray(raw)) return [];
   const flat = [];
@@ -94,37 +91,35 @@ const EditSoal = () => {
 
         setKeterangan(data.keterangan || "");
 
-        const localDate = data.tanggal
-          ? new Date(data.tanggal).toLocaleDateString("en-CA", {
-              timeZone: "Asia/Jakarta",
-            })
-          : "";
-        setTanggal(localDate);
+        // Format tanggal untuk input type="date" (YYYY-MM-DD)
+        const formatDate = (dateStr) => {
+            if (!dateStr) return "";
+            const d = new Date(dateStr);
+            // Gunakan ISO string lalu ambil bagian tanggalnya saja agar aman
+            // Atau jika format dari DB sudah YYYY-MM-DD, pakai langsung
+            return d.toISOString().split('T')[0]; 
+        };
 
-        const localDateBerakhir = data.tanggal_berakhir
-          ? new Date(data.tanggal_berakhir).toLocaleDateString("en-CA", {
-              timeZone: "Asia/Jakarta",
-            })
-          : "";
-        setTanggalBerakhir(localDateBerakhir);
+        setTanggal(data.tanggal || "");
+        setTanggalBerakhir(data.tanggal_berakhir || "");
 
         setJamMulai(data.jam_mulai || "");
         setJamBerakhir(data.jam_berakhir || "");
         setDurasi(data.durasi || "");
 
-        setAcakSoal(data.acak_soal || false);
-        setAcakOpsi(data.acak_opsi || false);
+        setAcakSoal(Boolean(data.acak_soal));
+        setAcakOpsi(Boolean(data.acak_opsi));
 
         setDaftarSoal(
           (data.soalList || []).map((s) => ({
             id: s.id,
             bobot: s.bobot || 1,
-            tipeSoal: s.tipeSoal,
+            tipeSoal: s.tipeSoal, // Pastikan backend kirim 'esai', 'pilihanGanda', dll
             soalText: s.soalText,
-            gambar: s.gambar || null,
-            gambarPreview: s.gambar
-              ? `${API_URL}/api/ujian${s.gambar}`
-              : null,
+            // Gambar dari server (URL string) disimpan di sini
+            gambar: s.gambar || null, 
+            // Preview juga pakai URL yang sama
+            gambarPreview: s.gambar ? s.gambar : null, 
 
             // --- MAP DATA CONFIG & NORMALISASI TIPE FILE ---
             allowedTypes: normalizeAllowedTypes(s.allowedTypes || []),
@@ -133,16 +128,21 @@ const EditSoal = () => {
             // ------------------------------------------------
 
             pilihan:
-              s.tipeSoal === "pilihanGanda"
+              s.tipeSoal === "pilihanGanda" || s.tipeSoal === "teksSingkat"
                 ? (s.pilihan || []).map((p) => ({
                     id: p.id,
                     text: p.text,
+                    isCorrect: p.isCorrect // Backend kirim boolean
                   }))
                 : [],
+            
+            // Cari ID opsi yang benar untuk radio button
             kunciJawaban:
               s.tipeSoal === "pilihanGanda"
                 ? (s.pilihan || []).find((p) => p.isCorrect)?.id || 0
                 : 0,
+            
+            // Text jawaban untuk isian singkat
             kunciJawabanText:
               s.tipeSoal === "teksSingkat"
                 ? (s.pilihan || []).find((p) => p.isCorrect)?.text || ""
@@ -185,7 +185,7 @@ const EditSoal = () => {
       if (s.id === soalId) {
         return {
           ...s,
-          gambar: file,
+          gambar: file, // Simpan File object
           gambarPreview: file ? URL.createObjectURL(file) : s.gambarPreview,
         };
       }
@@ -218,8 +218,8 @@ const EditSoal = () => {
         gambar: null,
         gambarPreview: null,
         pilihan: [
-          { id: newPilId1, text: "" },
-          { id: newPilId2, text: "" },
+          { id: newPilId1, text: "", isCorrect: true },
+          { id: newPilId2, text: "", isCorrect: false },
         ],
         kunciJawaban: newPilId1,
         kunciJawabanText: "",
@@ -239,15 +239,13 @@ const EditSoal = () => {
   };
 
   const handleSoalChange = (id, field, value) => {
-    const updated = daftarSoal.map((s) =>
-      s.id === id ? { ...s, [field]: value } : s
+    setDaftarSoal((prev) => 
+        prev.map((s) => s.id === id ? { ...s, [field]: value } : s)
     );
-    setDaftarSoal(updated);
   };
 
   // =======================================================
-  // HANDLE TIPE FILE DOKUMEN (DISESUAIKAN DENGAN TambahSoal)
-  // exts = array, misal [".pdf"] atau [".doc", ".docx"]
+  // HANDLE TIPE FILE DOKUMEN
   // =======================================================
   const handleAllowedTypeChange = (soalId, exts) => {
     setDaftarSoal((prev) =>
@@ -260,10 +258,8 @@ const EditSoal = () => {
         let next = [...current];
 
         if (hasAny) {
-          // Jika salah satu ext di grup sudah ada -> hapus semua ext di grup itu
           next = next.filter((ext) => !exts.includes(ext));
         } else {
-          // Jika belum ada -> tambahkan semua ext di grup tersebut
           exts.forEach((ext) => {
             if (!next.includes(ext)) {
               next.push(ext);
@@ -284,7 +280,7 @@ const EditSoal = () => {
               ...s,
               pilihan: [
                 ...s.pilihan,
-                { id: `new_pil_${Date.now()}`, text: "" },
+                { id: `new_pil_${Date.now()}`, text: "", isCorrect: false },
               ],
             }
           : s
@@ -301,13 +297,18 @@ const EditSoal = () => {
             return s;
           }
           const newPilihan = s.pilihan.filter((p) => p.id !== pilihanId);
+          // Jika yang dihapus adalah kunci jawaban, pindahkan kunci ke opsi pertama
+          const currentKunciId = s.kunciJawaban;
+          let newKunci = currentKunciId;
+          
+          if(currentKunciId === pilihanId) {
+             newKunci = newPilihan[0]?.id || 0;
+          }
+
           return {
             ...s,
             pilihan: newPilihan,
-            kunciJawaban:
-              s.kunciJawaban === pilihanId
-                ? newPilihan[0]?.id || 0
-                : s.kunciJawaban,
+            kunciJawaban: newKunci,
           };
         }
         return s;
@@ -357,27 +358,36 @@ const EditSoal = () => {
       return;
     }
 
+    // Siapkan payload JSON
     const soalList = daftarSoal.map((s) => ({
-      id: s.id,
+      id: s.id.toString().startsWith("new_") ? null : s.id, // ID null untuk soal baru
       bobot: s.bobot,
       tipeSoal: s.tipeSoal,
       soalText: s.soalText,
-      gambar: s.gambarPreview?.includes("/uploads/")
-        ? s.gambarPreview.replace(`${API_URL}/api/ujian`, "")
-        : null,
+      // Jika gambar masih string (URL lama), kirim stringnya
+      // Jika gambar Object File (baru upload), nanti dikirim via formData file
+      gambar: (typeof s.gambar === 'string') ? s.gambar : null, 
+      
       pilihan: s.tipeSoal === "pilihanGanda" ? s.pilihan : [],
+      
+      // Kirim text jawaban yang benar untuk validasi di backend
       kunciJawabanText:
         s.tipeSoal === "pilihanGanda"
           ? s.pilihan.find((p) => p.id === s.kunciJawaban)?.text || ""
           : s.tipeSoal === "teksSingkat"
           ? s.kunciJawabanText || ""
           : "",
+      
       allowedTypes: s.tipeSoal === "soalDokumen" ? s.allowedTypes : [],
       maxSize: s.tipeSoal === "soalDokumen" ? s.maxSize : 0,
       maxCount: s.tipeSoal === "soalDokumen" ? s.maxCount : 0,
     }));
 
     const formData = new FormData();
+    
+    // [PENTING] Method Spoofing agar Laravel membaca ini sebagai PUT
+    formData.append('_method', 'PUT'); 
+
     formData.append(
       "data",
       JSON.stringify({
@@ -393,7 +403,9 @@ const EditSoal = () => {
       })
     );
 
+    // Append file gambar baru
     daftarSoal.forEach((s, i) => {
+      // Hanya append jika s.gambar adalah File object (bukan string URL)
       if (s.gambar && typeof s.gambar !== "string") {
         formData.append(`gambar_${i}`, s.gambar);
       }
@@ -401,10 +413,13 @@ const EditSoal = () => {
 
     try {
       const token = sessionStorage.getItem("adminToken");
+      
+      // Gunakan POST karena ada file upload + method spoofing
       const res = await fetch(`${API_URL}/api/ujian/${id}`, {
-        method: "PUT",
+        method: "POST", // Ubah dari PUT ke POST
         headers: {
           Authorization: `Bearer ${token}`,
+          // Jangan set Content-Type secara manual saat pakai FormData, browser akan set otomatis
         },
         body: formData,
       });
@@ -420,7 +435,7 @@ const EditSoal = () => {
         } else {
           navigate("/admin/daftar-soal");
         }
-      }, 3000);
+      }, 2000);
     } catch (err) {
       alert("Terjadi kesalahan: " + err.message);
     }
@@ -745,7 +760,7 @@ const EditSoal = () => {
                     <option value="soalDokumen">
                       Soal Dokumen (Jawaban Upload File)
                     </option>
-                    <option value="esay">Esai (Nilai Manual)</option>
+                    <option value="esai">Esai (Nilai Manual)</option>
                   </select>
                 </div>
 

@@ -98,23 +98,33 @@ const PartPeserta = () => {
 
       const payload = { ...form };
 
+      // [FIX] Tambahkan header Accept: application/json agar server melempar error dalam format JSON
       if (finalPesertaId) {
         res = await fetch(`${API_URL}/api/peserta/${finalPesertaId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json" 
+          },
           body: JSON.stringify(payload),
         });
       } else {
         res = await fetch(`${API_URL}/api/peserta`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
           body: JSON.stringify(payload),
         });
       }
 
       const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message || "Gagal menyimpan data peserta.");
+      
+      // Tangkap error validasi atau server error
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Gagal menyimpan data peserta.");
+      }
 
       const newPesertaId = finalPesertaId || data.id;
 
@@ -163,7 +173,6 @@ const PartPeserta = () => {
         onClose={handleClosePopup}
       />
 
-      {/* Konten utama diubah menjadi flex-1 untuk mengisi <main> dari layout */}
       <div className="flex-1 flex items-center justify-center p-4 md:p-8 bg-gray-50/50">
         <div className="w-full max-w-md">
           <div className="bg-white shadow-xl ring-1 ring-gray-900/5 rounded-2xl overflow-hidden">
@@ -259,7 +268,7 @@ const PartPeserta = () => {
                 </button>
               </form>
             ) : (
-              /* === KONFIRMASI DATA (DENGAN TOMBOL KEMBALI) === */
+              /* === KONFIRMASI DATA === */
               <div className="p-8 text-center">
                 <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
                   <FaCheckCircle className="h-8 w-8 text-green-600" />

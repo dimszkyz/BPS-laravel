@@ -16,7 +16,6 @@ class PesertaController extends Controller
      */
     public function index(Request $request)
     {
-        // Cek Role (Sesuai logic Node.js: req.admin.role !== 'superadmin')
         if ($request->user()->role !== 'superadmin') {
             return response()->json(['message' => 'Hanya Superadmin yang dapat melihat semua peserta.'], 403);
         }
@@ -31,8 +30,6 @@ class PesertaController extends Controller
      */
     public function show(Request $request, $id)
     {
-        // Validasi akses admin (semua admin bisa lihat detail untuk keperluan edit/ujian)
-        
         $peserta = Peserta::find($id);
         if (!$peserta) {
             return response()->json(['message' => 'Peserta tidak ditemukan'], 404);
@@ -54,12 +51,12 @@ class PesertaController extends Controller
         ]);
 
         try {
+            // [FIX] Masukkan password default agar Database tidak error
             $peserta = Peserta::create([
                 'nama' => $request->nama,
                 'nohp' => $request->nohp,
                 'email' => $request->email,
-                // Default password atau login code bisa diset disini
-                'password' => $request->password ?? '123456', 
+                'password' => '123456', // Default value
             ]);
 
             return response()->json([
@@ -86,7 +83,7 @@ class PesertaController extends Controller
         $request->validate([
             'nama' => 'required',
             'nohp' => 'required',
-            'email' => 'required|email|unique:peserta,email,' . $id, // Ignore unique check for current user
+            'email' => 'required|email|unique:peserta,email,' . $id,
         ]);
 
         try {

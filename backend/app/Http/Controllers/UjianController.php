@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class UjianController extends Controller
 {
@@ -77,12 +78,28 @@ class UjianController extends Controller
                 $gambarPath = null;
                 $fileKey = "gambar_" . $index;
                 
-                if ($request->hasFile($fileKey)) {
-                    $path = $request->file($fileKey)->store('uploads', 'public');
-                    $gambarPath = '/storage/' . $path;
-                } elseif (!empty($soalData['gambar'])) {
-                    $gambarPath = $soalData['gambar'];
-                }
+                // --- FIX GAMBAR: Simpan ke storage public ---
+                $fileKey = "gambar_" . $index;
+                    $gambarPath = null;
+                    
+                    if ($request->hasFile($fileKey)) {
+                        // Jika upload baru
+                        $path = $request->file($fileKey)->store('uploads', 'public');
+                        $gambarPath = '/storage/' . $path;
+                    } elseif (!empty($soalData['gambar'])) {
+                        // Jika menggunakan gambar lama
+                        $rawPath = $soalData['gambar'];
+                        
+                        // Cek apakah string mengandung http/https (URL lengkap)
+                        if (filter_var($rawPath, FILTER_VALIDATE_URL)) {
+                            // Ambil path-nya saja: /storage/uploads/nama.jpg
+                            $parsed = parse_url($rawPath, PHP_URL_PATH);
+                            $gambarPath = $parsed;
+                        } else {
+                            // Jika sudah path relatif, pakai langsung
+                            $gambarPath = $rawPath;
+                        }
+                    }
 
                 $fileConfig = null;
                 if (($soalData['tipeSoal'] ?? '') === 'soalDokumen') {
@@ -135,7 +152,7 @@ class UjianController extends Controller
 
     /**
      * PUT /api/ujian/:id
-     * Update ujian (Logika Baru)
+     * Update ujian
      */
     public function update(Request $request, $id)
     {
@@ -185,11 +202,22 @@ class UjianController extends Controller
                     // Handle Gambar
                     $fileKey = "gambar_" . $index;
                     $gambarPath = null;
+                    
                     if ($request->hasFile($fileKey)) {
+                        // Jika ada upload baru, hapus yang lama jika perlu (opsional)
+                        if ($question && $question->gambar && Storage::disk('public')->exists(str_replace('/storage/', '', $question->gambar))) {
+                            // Storage::disk('public')->delete(str_replace('/storage/', '', $question->gambar));
+                        }
+                        
                         $path = $request->file($fileKey)->store('uploads', 'public');
                         $gambarPath = '/storage/' . $path;
                     } elseif (!empty($soalData['gambar'])) {
-                        $gambarPath = $soalData['gambar'];
+                        // Jika tidak ada file baru, pakai path yang lama (dikirim dari frontend)
+                        // Pastikan hanya path relatif yang disimpan, bukan full URL
+                        $rawPath = $soalData['gambar'];
+                        // Jika frontend mengirim full URL, kita ambil path-nya saja
+                        $parsedUrl = parse_url($rawPath, PHP_URL_PATH); 
+                        $gambarPath = $parsedUrl ? $parsedUrl : $rawPath; 
                     }
 
                     // Config
@@ -259,7 +287,7 @@ class UjianController extends Controller
 
     /**
      * GET /api/ujian/:id
-     * Detail Ujian
+     * Detail Ujian untuk Admin (Edit)
      */
     public function show(Request $request, $id)
     {
@@ -276,7 +304,18 @@ class UjianController extends Controller
 
         $soalList = $exam->questions->map(function($q) {
             $pilihan = [];
-            if ($q->tipe_soal === 'pilihanGanda' || $q->tipe_soal === 'teksSingkat') {
+            
+            // --- FIX 1: Normalisasi Tipe Soal (Masalah Esai jadi PG) ---
+            $tipeSoal = $q->tipe_soal;
+            // Jika di DB tertulis 'essay' / 'Essay', ubah jadi 'esai' agar sesuai value select di frontend
+            if (strtolower($tipeSoal) === 'essay') {
+                $tipeSoal = 'esai';
+            }
+            if (strtolower($tipeSoal) === 'pilihan_ganda') {
+                $tipeSoal = 'pilihanGanda';
+            }
+
+            if ($tipeSoal === 'pilihanGanda' || $tipeSoal === 'teksSingkat') {
                 $pilihan = $q->options->map(function($opt) {
                     return [
                         'id' => $opt->id,
@@ -288,12 +327,20 @@ class UjianController extends Controller
 
             $config = $q->file_config ?? [];
 
+            // --- FIX 2: Generate Full URL untuk Gambar ---
+            $gambarUrl = $q->gambar;
+            if ($gambarUrl && !filter_var($gambarUrl, FILTER_VALIDATE_URL)) {
+                // Hapus slash di depan jika ada agar url() bekerja benar
+                $cleanPath = ltrim($gambarUrl, '/');
+                $gambarUrl = url($cleanPath);
+            }
+
             return [
                 'id' => $q->id,
-                'tipeSoal' => $q->tipe_soal,
+                'tipeSoal' => $tipeSoal,
                 'bobot' => $q->bobot,
                 'soalText' => $q->soal_text,
-                'gambar' => $q->gambar,
+                'gambar' => $gambarUrl, // Kirim Full URL
                 'allowedTypes' => $config['allowedTypes'] ?? [],
                 'maxSize' => $config['maxSize'] ?? 5,
                 'maxCount' => $config['maxCount'] ?? 1,
@@ -316,6 +363,36 @@ class UjianController extends Controller
     }
 
     /**
+     * Tambahan: Ambil Detail 1 Soal Saja
+     * (Berguna jika EditSoal.jsx melakukan fetch per soal)
+     */
+    public function getSoalById($id)
+    {
+        $soal = Question::with('options')->find($id);
+
+        if (!$soal) {
+            return response()->json(['message' => 'Soal tidak ditemukan'], 404);
+        }
+
+        // --- Normalisasi Tipe Soal ---
+        $tipeSoal = $soal->tipe_soal;
+        if (strtolower($tipeSoal) === 'essay') {
+            $tipeSoal = 'esai';
+        }
+
+        // --- Full URL Gambar ---
+        $gambarUrl = $soal->gambar;
+        if ($gambarUrl && !filter_var($gambarUrl, FILTER_VALIDATE_URL)) {
+            $cleanPath = ltrim($gambarUrl, '/');
+            $gambarUrl = url($cleanPath);
+        }
+        $soal->gambar = $gambarUrl;
+        $soal->tipe_soal = $tipeSoal;
+
+        return response()->json($soal);
+    }
+
+    /**
      * DELETE /api/ujian/:id
      * Soft delete
      */
@@ -334,6 +411,9 @@ class UjianController extends Controller
         return response()->json(['message' => 'Ujian berhasil diarsipkan']);
     }
 
+    /**
+     * Cek apakah ujian aktif (Public Route untuk Peserta)
+     */
     public function checkActive($id)
     {
         $exam = Exam::where('id', $id)->where('is_deleted', 0)->first();
@@ -342,25 +422,21 @@ class UjianController extends Controller
             return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
         }
 
-        $now = now(); // Waktu server (pastikan timezone server WIB atau sesuai)
-        // Jika settingan timezone Laravel sudah 'Asia/Jakarta', $now sudah benar.
+        $now = Carbon::now('Asia/Jakarta'); 
         
         $msg = null;
         
-        // Logika tanggal & jam
-        $startDateTime = \Carbon\Carbon::parse($exam->tanggal . ' ' . $exam->jam_mulai);
-        $endDateTime = \Carbon\Carbon::parse($exam->tanggal_berakhir . ' ' . $exam->jam_berakhir);
+        $startDateTime = Carbon::parse($exam->tanggal . ' ' . $exam->jam_mulai, 'Asia/Jakarta');
+        $endDateTime = Carbon::parse($exam->tanggal_berakhir . ' ' . $exam->jam_berakhir, 'Asia/Jakarta');
 
         if ($now->lessThan($startDateTime)) {
-             $msg = "Ujian belum dimulai.";
+             $msg = "Ujian belum dimulai. (Mulai: " . $startDateTime->format('d/m H:i') . " WIB)";
         } elseif ($now->greaterThan($endDateTime)) {
-             $msg = "Ujian sudah berakhir.";
+             $msg = "Ujian sudah berakhir. (Selesai: " . $endDateTime->format('d/m H:i') . " WIB)";
         } else {
-            // Cek jam harian (jika range tanggal > 1 hari, biasanya jam operasional per hari dicek)
-            // Logika sederhana: jika dalam range tanggal, cek jam saat ini
             $currentTime = $now->format('H:i:s');
             if ($currentTime < $exam->jam_mulai || $currentTime > $exam->jam_berakhir) {
-                $msg = "Jam ujian saat ini ditutup. Akses: " . $exam->jam_mulai . " - " . $exam->jam_berakhir;
+                $msg = "Sesi ujian saat ini ditutup. Akses dibuka pukul: " . $exam->jam_mulai . " - " . $exam->jam_berakhir . " WIB";
             }
         }
 
@@ -380,7 +456,6 @@ class UjianController extends Controller
         $exam = Exam::with(['questions.options'])->find($id);
         if (!$exam) return response()->json(['message' => 'Ujian tidak ditemukan'], 404);
 
-        // Format data aman untuk peserta
         $soalList = $exam->questions->map(function($q) {
             $pilihan = $q->options->map(function($opt) {
                 return [
@@ -390,27 +465,34 @@ class UjianController extends Controller
                 ];
             });
             
-            // Acak pilihan jika setting ujian mengizinkan
-            // if ($exam->acak_opsi) { $pilihan = $pilihan->shuffle(); }
+            // --- FIX 2: Generate Full URL untuk Gambar di Peserta ---
+            $gambarUrl = $q->gambar;
+            if ($gambarUrl && !filter_var($gambarUrl, FILTER_VALIDATE_URL)) {
+                $cleanPath = ltrim($gambarUrl, '/');
+                $gambarUrl = url($cleanPath);
+            }
 
             return [
                 'id' => $q->id,
                 'tipeSoal' => $q->tipe_soal,
                 'soalText' => $q->soal_text,
-                'gambar' => $q->gambar,
+                'gambar' => $gambarUrl,
                 'bobot' => $q->bobot,
                 'fileConfig' => $q->file_config,
                 'pilihan' => $pilihan
             ];
         });
         
-        // Acak soal jika perlu
-        // if ($exam->acak_soal) { $soalList = $soalList->shuffle(); }
-
         return response()->json([
             'id' => $exam->id,
             'keterangan' => $exam->keterangan,
             'durasi' => $exam->durasi,
+            'tanggal' => $exam->tanggal,
+            'tanggal_berakhir' => $exam->tanggal_berakhir,
+            'jam_mulai' => $exam->jam_mulai,
+            'jam_berakhir' => $exam->jam_berakhir,
+            'acak_soal' => $exam->acak_soal,
+            'acak_opsi' => $exam->acak_opsi,
             'soalList' => $soalList
         ]);
     }
